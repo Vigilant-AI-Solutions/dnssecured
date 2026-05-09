@@ -11,6 +11,12 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <div class="announce">
+      <p>
+        New: <strong>Watch DNS in real-time</strong> — DNSsecured simulates resolver trust, DNSSEC, DANE, and traffic steering in one flow.
+      </p>
+      <a href="./docs.html">See how it works</a>
+    </div>
     <header class="topbar">
       <a class="brand" href="./index.html">DNSsecured</a>
       <nav>
@@ -28,9 +34,48 @@
           DNSsecured helps teams ship safer DNS infrastructure with hardened resolver trust, DNS posture checks, DNSSEC and DANE validation, and
           decision engines for resilient traffic steering.
         </p>
+        <p class="hero-highlight">Watch DNSsecured process a live query path with policy checks in under a minute.</p>
         <div class="actions">
           <a class="btn primary" href="./docs.html">Read docs</a>
           <a class="btn" href="https://github.com/Vigilant-AI-Solutions/dnssecured">View source</a>
+        </div>
+      </section>
+
+      <section class="realtime card" aria-label="Real-time DNS flow">
+        <div class="realtime-head">
+          <h2>Watch DNS in real-time</h2>
+          <span class="pill">Pipeline cycle: &lt; 60s</span>
+        </div>
+        <p class="muted">
+          This visual simulation shows how DNSsecured evaluates a request: resolver trust, DNS checks, DNSSEC/DANE validation, and smart endpoint
+          steering.
+        </p>
+        <div class="flow" id="dns-flow">
+          <div class="node" data-step="0">
+            <h3>Query Ingest</h3>
+            <p>Domain + tenant request accepted.</p>
+          </div>
+          <div class="node" data-step="1">
+            <h3>Trusted Resolver</h3>
+            <p>DoT/DoH + optional pinning applied.</p>
+          </div>
+          <div class="node" data-step="2">
+            <h3>Security Checks</h3>
+            <p>SPF, DKIM, DMARC, MTA-STS, TLS-RPT, BIMI.</p>
+          </div>
+          <div class="node" data-step="3">
+            <h3>DNSSEC + DANE</h3>
+            <p>DS/DNSKEY and TLSA paths validated.</p>
+          </div>
+          <div class="node" data-step="4">
+            <h3>Traffic Steering</h3>
+            <p>Latency/health policy selects endpoint.</p>
+          </div>
+        </div>
+        <div class="telemetry">
+          <div><span>Stage</span><strong id="telemetry-stage">Query Ingest</strong></div>
+          <div><span>Posture Score</span><strong id="telemetry-score">100</strong></div>
+          <div><span>Selected Route</span><strong id="telemetry-route">us-east-1</strong></div>
         </div>
       </section>
 
@@ -88,5 +133,6 @@
     <footer>
       <p>DNSsecured is built for infrastructure teams who need practical DNS security at production scale.</p>
     </footer>
+    <script src="./visual.js"></script>
   </body>
 </html>
