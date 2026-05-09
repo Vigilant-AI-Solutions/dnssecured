@@ -20,11 +20,36 @@ type Resolver interface {
 	LookupTXT(ctx context.Context, name string) ([]string, error)
 	LookupMX(ctx context.Context, name string) ([]*net.MX, error)
 	LookupNS(ctx context.Context, name string) ([]*net.NS, error)
+	LookupDS(ctx context.Context, name string) ([]DSRecord, error)
+	LookupDNSKEY(ctx context.Context, name string) ([]DNSKEYRecord, error)
+	LookupTLSA(ctx context.Context, name string) ([]TLSARecord, error)
 	LookupCNAME(ctx context.Context, name string) (string, error)
+}
+
+type DSRecord struct {
+	KeyTag     uint16
+	Algorithm  uint8
+	DigestType uint8
+	Digest     string
+}
+
+type DNSKEYRecord struct {
+	Flags     uint16
+	Protocol  uint8
+	Algorithm uint8
+	PublicKey string
+}
+
+type TLSARecord struct {
+	Usage        uint8
+	Selector     uint8
+	MatchingType uint8
+	Certificate  string
 }
 
 type NetResolver struct {
 	Resolver *net.Resolver
+	rawQuery func(ctx context.Context, name string, qtype uint16) (*dns.Msg, error)
 }
 
 type ResolverMode string
@@ -60,11 +85,29 @@ func NewNetResolverWithNameservers(nameservers []string) *NetResolver {
 	if len(normalized) == 0 {
 		return NewNetResolver()
 	}
-	var next atomic.Uint64
+	var nextDial atomic.Uint64
+	var nextRaw atomic.Uint64
+	rawQuery := func(ctx context.Context, name string, qtype uint16) (*dns.Msg, error) {
+		msg := &dns.Msg{}
+		msg.SetQuestion(dns.Fqdn(name), qtype)
+		msg.RecursionDesired = true
+		msg.SetEdns0(1232, true)
+		i := nextRaw.Add(1)
+		target := normalized[(i-1)%uint64(len(normalized))]
+		client := &dns.Client{
+			Net:     "udp",
+			Timeout: 7 * time.Second,
+		}
+		resp, _, err := client.ExchangeContext(ctx, msg, target)
+		if err != nil {
+			return nil, err
+		}
+		return resp, nil
+	}
 	resolver := &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			i := next.Add(1)
+			i := nextDial.Add(1)
 			target := normalized[(i-1)%uint64(len(normalized))]
 			dialNetwork := network
 			if !strings.HasPrefix(dialNetwork, "udp") && !strings.HasPrefix(dialNetwork, "tcp") {
@@ -74,7 +117,7 @@ func NewNetResolverWithNameservers(nameservers []string) *NetResolver {
 			return dialer.DialContext(ctx, dialNetwork, target)
 		},
 	}
-	return &NetResolver{Resolver: resolver}
+	return &NetResolver{Resolver: resolver, rawQuery: rawQuery}
 }
 
 func NewResolverWithConfig(cfg ResolverConfig) (Resolver, error) {
@@ -243,6 +286,7 @@ func (r *advancedResolver) query(ctx context.Context, name string, qtype uint16)
 	msg := &dns.Msg{}
 	msg.SetQuestion(dns.Fqdn(name), qtype)
 	msg.RecursionDesired = true
+	msg.SetEdns0(1232, true)
 
 	switch r.mode {
 	case ResolverModeDoT:
@@ -374,6 +418,81 @@ func (r *advancedResolver) LookupCNAME(ctx context.Context, name string) (string
 	return "", toNotFound(name)
 }
 
+func (r *advancedResolver) LookupDS(ctx context.Context, name string) ([]DSRecord, error) {
+	resp, err := r.query(ctx, name, dns.TypeDS)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Rcode == dns.RcodeNameError {
+		return nil, toNotFound(name)
+	}
+	out := make([]DSRecord, 0)
+	for _, rr := range resp.Answer {
+		if ds, ok := rr.(*dns.DS); ok {
+			out = append(out, DSRecord{
+				KeyTag:     ds.KeyTag,
+				Algorithm:  ds.Algorithm,
+				DigestType: ds.DigestType,
+				Digest:     strings.ToLower(ds.Digest),
+			})
+		}
+	}
+	if len(out) == 0 {
+		return nil, toNotFound(name)
+	}
+	return out, nil
+}
+
+func (r *advancedResolver) LookupDNSKEY(ctx context.Context, name string) ([]DNSKEYRecord, error) {
+	resp, err := r.query(ctx, name, dns.TypeDNSKEY)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Rcode == dns.RcodeNameError {
+		return nil, toNotFound(name)
+	}
+	out := make([]DNSKEYRecord, 0)
+	for _, rr := range resp.Answer {
+		if key, ok := rr.(*dns.DNSKEY); ok {
+			out = append(out, DNSKEYRecord{
+				Flags:     key.Flags,
+				Protocol:  key.Protocol,
+				Algorithm: key.Algorithm,
+				PublicKey: key.PublicKey,
+			})
+		}
+	}
+	if len(out) == 0 {
+		return nil, toNotFound(name)
+	}
+	return out, nil
+}
+
+func (r *advancedResolver) LookupTLSA(ctx context.Context, name string) ([]TLSARecord, error) {
+	resp, err := r.query(ctx, name, dns.TypeTLSA)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Rcode == dns.RcodeNameError {
+		return nil, toNotFound(name)
+	}
+	out := make([]TLSARecord, 0)
+	for _, rr := range resp.Answer {
+		if tlsa, ok := rr.(*dns.TLSA); ok {
+			out = append(out, TLSARecord{
+				Usage:        tlsa.Usage,
+				Selector:     tlsa.Selector,
+				MatchingType: tlsa.MatchingType,
+				Certificate:  strings.ToLower(tlsa.Certificate),
+			})
+		}
+	}
+	if len(out) == 0 {
+		return nil, toNotFound(name)
+	}
+	return out, nil
+}
+
 func (r *NetResolver) LookupTXT(ctx context.Context, name string) ([]string, error) {
 	return r.Resolver.LookupTXT(ctx, name)
 }
@@ -388,4 +507,88 @@ func (r *NetResolver) LookupNS(ctx context.Context, name string) ([]*net.NS, err
 
 func (r *NetResolver) LookupCNAME(ctx context.Context, name string) (string, error) {
 	return r.Resolver.LookupCNAME(ctx, name)
+}
+
+func (r *NetResolver) LookupDS(ctx context.Context, name string) ([]DSRecord, error) {
+	if r.rawQuery == nil {
+		return nil, fmt.Errorf("resolver does not support DS lookup in system mode")
+	}
+	resp, err := r.rawQuery(ctx, name, dns.TypeDS)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Rcode == dns.RcodeNameError {
+		return nil, toNotFound(name)
+	}
+	out := make([]DSRecord, 0)
+	for _, rr := range resp.Answer {
+		if ds, ok := rr.(*dns.DS); ok {
+			out = append(out, DSRecord{
+				KeyTag:     ds.KeyTag,
+				Algorithm:  ds.Algorithm,
+				DigestType: ds.DigestType,
+				Digest:     strings.ToLower(ds.Digest),
+			})
+		}
+	}
+	if len(out) == 0 {
+		return nil, toNotFound(name)
+	}
+	return out, nil
+}
+
+func (r *NetResolver) LookupDNSKEY(ctx context.Context, name string) ([]DNSKEYRecord, error) {
+	if r.rawQuery == nil {
+		return nil, fmt.Errorf("resolver does not support DNSKEY lookup in system mode")
+	}
+	resp, err := r.rawQuery(ctx, name, dns.TypeDNSKEY)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Rcode == dns.RcodeNameError {
+		return nil, toNotFound(name)
+	}
+	out := make([]DNSKEYRecord, 0)
+	for _, rr := range resp.Answer {
+		if key, ok := rr.(*dns.DNSKEY); ok {
+			out = append(out, DNSKEYRecord{
+				Flags:     key.Flags,
+				Protocol:  key.Protocol,
+				Algorithm: key.Algorithm,
+				PublicKey: key.PublicKey,
+			})
+		}
+	}
+	if len(out) == 0 {
+		return nil, toNotFound(name)
+	}
+	return out, nil
+}
+
+func (r *NetResolver) LookupTLSA(ctx context.Context, name string) ([]TLSARecord, error) {
+	if r.rawQuery == nil {
+		return nil, fmt.Errorf("resolver does not support TLSA lookup in system mode")
+	}
+	resp, err := r.rawQuery(ctx, name, dns.TypeTLSA)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Rcode == dns.RcodeNameError {
+		return nil, toNotFound(name)
+	}
+	out := make([]TLSARecord, 0)
+	for _, rr := range resp.Answer {
+		if tlsa, ok := rr.(*dns.TLSA); ok {
+			out = append(out, TLSARecord{
+				Usage:        tlsa.Usage,
+				Selector:     tlsa.Selector,
+				MatchingType: tlsa.MatchingType,
+				Certificate:  strings.ToLower(tlsa.Certificate),
+			})
+		}
+	}
+	if len(out) == 0 {
+		return nil, toNotFound(name)
+	}
+	return out, nil
 }

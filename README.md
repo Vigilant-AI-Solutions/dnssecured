@@ -6,7 +6,7 @@ DNSsecured is a reusable, library-first DNS security stack in Go for building ha
 
 - **Security engine**: pluggable check pipeline with bounded concurrent execution
 - **Resolver abstraction**: replaceable DNS resolver layer (`net.Resolver` default)
-- **Policy checks**: NS redundancy, TLS certificate posture, SPF, DKIM selector health, DMARC, MTA-STS, TLS-RPT, BIMI
+- **Policy checks**: NS redundancy, DNSSEC validation, DANE/TLSA posture, TLS certificate posture, SPF, DKIM selector health, DMARC, MTA-STS, TLS-RPT, BIMI
 - **Scoring model**: posture score + normalized findings for downstream automation
 - **Service runtime**: lightweight HTTP façade for integration and demos
 
@@ -43,7 +43,7 @@ cors true
 default_tenant public
 timeout 10s
 max_concurrency 4
-checks ns_redundancy tls_certificate spf dkim_selector_health dmarc mta_sts tls_rpt bimi
+checks ns_redundancy dnssec_validation dane_tlsa tls_certificate spf dkim_selector_health dmarc mta_sts tls_rpt bimi
 nameservers 1.1.1.1 1.0.0.1 8.8.8.8:53
 resolver_mode dot
 dot_upstreams 1.1.1.1 1.0.0.1

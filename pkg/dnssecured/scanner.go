@@ -43,6 +43,8 @@ func NewScanner(resolver Resolver, opts ...ScannerOption) *Scanner {
 func defaultChecks() []Check {
 	return []Check{
 		nsRedundancyCheck{},
+		dnssecValidationCheck{},
+		daneCheck{},
 		tlsCertificateCheck{},
 		spfCheck{},
 		dkimCheck{},
@@ -56,6 +58,8 @@ func defaultChecks() []Check {
 func AvailableCheckNames() []string {
 	return []string{
 		"ns_redundancy",
+		"dnssec_validation",
+		"dane_tlsa",
 		"tls_certificate",
 		"spf",
 		"dkim_selector_health",
@@ -76,6 +80,10 @@ func ChecksFromNames(names []string) ([]Check, error) {
 		switch name {
 		case "ns_redundancy":
 			out = append(out, nsRedundancyCheck{})
+		case "dnssec_validation":
+			out = append(out, dnssecValidationCheck{})
+		case "dane_tlsa":
+			out = append(out, daneCheck{})
 		case "tls_certificate":
 			out = append(out, tlsCertificateCheck{})
 		case "spf":

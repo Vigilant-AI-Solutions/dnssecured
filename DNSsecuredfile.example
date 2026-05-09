@@ -8,7 +8,7 @@ timeout 10s
 max_concurrency 4
 
 # Choose exactly the checks you want to run (order matters).
-checks ns_redundancy tls_certificate spf dkim_selector_health dmarc mta_sts tls_rpt bimi
+checks ns_redundancy dnssec_validation dane_tlsa tls_certificate spf dkim_selector_health dmarc mta_sts tls_rpt bimi
 
 # Optional custom resolver targets used by DNS checks.
 # Supports host or host:port. Port defaults to 53.

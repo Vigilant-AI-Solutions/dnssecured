@@ -304,6 +304,213 @@ func (nsRedundancyCheck) Run(ctx context.Context, input CheckInput) Finding {
 	}
 }
 
+type dnssecValidationCheck struct{}
+
+func (dnssecValidationCheck) Name() string { return "dnssec_validation" }
+
+func (dnssecValidationCheck) Run(ctx context.Context, input CheckInput) Finding {
+	ds, err := input.Resolver.LookupDS(ctx, input.Domain)
+	if err != nil {
+		if dnsNotFound(err) {
+			return Finding{
+				Check:    "dnssec_validation",
+				Status:   StatusFail,
+				Severity: SeverityHigh,
+				Title:    "DNSSEC DS record missing",
+				Summary:  "No DS records found at delegation; chain of trust is not established.",
+				Remediation: []string{
+					"Publish DS records at the parent zone and verify delegation signer state.",
+				},
+			}
+		}
+		return Finding{
+			Check:    "dnssec_validation",
+			Status:   StatusWarn,
+			Severity: SeverityMedium,
+			Title:    "DNSSEC DS lookup unavailable",
+			Summary:  err.Error(),
+			Remediation: []string{
+				"Use resolver_mode udp/dot/doh with configured upstreams for DNSSEC checks.",
+			},
+		}
+	}
+	if len(ds) == 0 {
+		return Finding{
+			Check:    "dnssec_validation",
+			Status:   StatusFail,
+			Severity: SeverityHigh,
+			Title:    "DNSSEC DS record missing",
+			Summary:  "No DS records found at delegation; chain of trust is not established.",
+			Remediation: []string{
+				"Publish DS records at the parent zone and verify delegation signer state.",
+			},
+		}
+	}
+
+	dnskeys, err := input.Resolver.LookupDNSKEY(ctx, input.Domain)
+	if err != nil {
+		if dnsNotFound(err) {
+			return Finding{
+				Check:    "dnssec_validation",
+				Status:   StatusFail,
+				Severity: SeverityHigh,
+				Title:    "DNSKEY records missing",
+				Summary:  "No DNSKEY records found for signed domain.",
+			}
+		}
+		return Finding{
+			Check:    "dnssec_validation",
+			Status:   StatusFail,
+			Severity: SeverityHigh,
+			Title:    "DNSKEY lookup failed",
+			Summary:  err.Error(),
+			Remediation: []string{
+				"Ensure signed DNSKEY RRset is published and reachable from your resolvers.",
+			},
+		}
+	}
+	if len(dnskeys) == 0 {
+		return Finding{
+			Check:    "dnssec_validation",
+			Status:   StatusFail,
+			Severity: SeverityHigh,
+			Title:    "DNSKEY records missing",
+			Summary:  "No DNSKEY records found for signed domain.",
+		}
+	}
+
+	var ksk, zsk int
+	for _, key := range dnskeys {
+		switch key.Flags {
+		case 257:
+			ksk++
+		case 256:
+			zsk++
+		}
+	}
+	evidence := []string{
+		fmt.Sprintf("ds_records=%d", len(ds)),
+		fmt.Sprintf("dnskey_records=%d", len(dnskeys)),
+		fmt.Sprintf("ksk=%d", ksk),
+		fmt.Sprintf("zsk=%d", zsk),
+	}
+	if ksk == 0 || zsk == 0 {
+		return Finding{
+			Check:    "dnssec_validation",
+			Status:   StatusWarn,
+			Severity: SeverityMedium,
+			Title:    "DNSSEC key role split not clear",
+			Summary:  "DNSKEY records found, but expected KSK/ZSK roles are incomplete.",
+			Evidence: evidence,
+			Remediation: []string{
+				"Maintain clear KSK (257) and ZSK (256) key roles for operational rollover safety.",
+			},
+		}
+	}
+	return Finding{
+		Check:    "dnssec_validation",
+		Status:   StatusPass,
+		Severity: SeverityLow,
+		Title:    "DNSSEC chain components present",
+		Summary:  "DS and DNSKEY records are present with KSK/ZSK roles.",
+		Evidence: evidence,
+	}
+}
+
+type daneCheck struct{}
+
+func (daneCheck) Name() string { return "dane_tlsa" }
+
+func (daneCheck) Run(ctx context.Context, input CheckInput) Finding {
+	mx, err := input.Resolver.LookupMX(ctx, input.Domain)
+	if err != nil {
+		return Finding{
+			Check:    "dane_tlsa",
+			Status:   StatusWarn,
+			Severity: SeverityMedium,
+			Title:    "MX lookup failed",
+			Summary:  err.Error(),
+			Remediation: []string{
+				"Ensure MX records resolve before enforcing DANE for SMTP endpoints.",
+			},
+		}
+	}
+	if len(mx) == 0 {
+		return Finding{
+			Check:    "dane_tlsa",
+			Status:   StatusWarn,
+			Severity: SeverityLow,
+			Title:    "No MX records found",
+			Summary:  "DANE for SMTP could not be evaluated without MX hosts.",
+		}
+	}
+
+	tlsaFound := 0
+	validTLSA := 0
+	evidence := make([]string, 0)
+	for _, record := range mx {
+		host := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(record.Host)), ".")
+		if host == "" {
+			continue
+		}
+		name := "_25._tcp." + host
+		tlsaRecords, lookupErr := input.Resolver.LookupTLSA(ctx, name)
+		if lookupErr != nil {
+			if !dnsNotFound(lookupErr) {
+				return Finding{
+					Check:    "dane_tlsa",
+					Status:   StatusWarn,
+					Severity: SeverityMedium,
+					Title:    "TLSA lookup failed",
+					Summary:  lookupErr.Error(),
+				}
+			}
+			continue
+		}
+		if len(tlsaRecords) == 0 {
+			continue
+		}
+		tlsaFound += len(tlsaRecords)
+		for _, rec := range tlsaRecords {
+			if rec.Usage <= 3 && rec.Selector <= 1 && rec.MatchingType <= 2 && strings.TrimSpace(rec.Certificate) != "" {
+				validTLSA++
+			}
+		}
+		evidence = append(evidence, fmt.Sprintf("%s tlsa=%d", host, len(tlsaRecords)))
+	}
+
+	if tlsaFound == 0 {
+		return Finding{
+			Check:    "dane_tlsa",
+			Status:   StatusWarn,
+			Severity: SeverityMedium,
+			Title:    "DANE TLSA records missing",
+			Summary:  "No TLSA records found for MX endpoints.",
+			Remediation: []string{
+				"Publish TLSA records on _25._tcp.<mx-host> and align with SMTP certificates.",
+			},
+		}
+	}
+	if validTLSA == 0 {
+		return Finding{
+			Check:    "dane_tlsa",
+			Status:   StatusFail,
+			Severity: SeverityHigh,
+			Title:    "DANE TLSA records malformed",
+			Summary:  "TLSA records exist but no valid usage/selector/matching values were detected.",
+			Evidence: evidence,
+		}
+	}
+	return Finding{
+		Check:    "dane_tlsa",
+		Status:   StatusPass,
+		Severity: SeverityLow,
+		Title:    "DANE TLSA records present",
+		Summary:  "TLSA records found for MX endpoints with valid structure.",
+		Evidence: append(evidence, fmt.Sprintf("valid_tlsa=%d", validTLSA)),
+	}
+}
+
 type tlsCertificateCheck struct{}
 
 func (tlsCertificateCheck) Name() string { return "tls_certificate" }
@@ -597,4 +804,13 @@ func findTagValue(record, tag string) string {
 		}
 	}
 	return ""
+}
+
+func dnsNotFound(err error) bool {
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) && dnsErr != nil && (dnsErr.IsNotFound || strings.Contains(strings.ToLower(dnsErr.Err), "no such host")) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such host") || strings.Contains(msg, "nxdomain") || strings.Contains(msg, "does not exist")
 }

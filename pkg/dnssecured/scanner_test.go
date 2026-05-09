@@ -10,9 +10,13 @@ import (
 )
 
 type fakeResolver struct {
-	txt map[string][]string
-	ns  map[string][]*net.NS
-	err map[string]error
+	txt    map[string][]string
+	mx     map[string][]*net.MX
+	ns     map[string][]*net.NS
+	ds     map[string][]DSRecord
+	dnskey map[string][]DNSKEYRecord
+	tlsa   map[string][]TLSARecord
+	err    map[string]error
 }
 
 func (f fakeResolver) LookupTXT(_ context.Context, name string) ([]string, error) {
@@ -25,8 +29,11 @@ func (f fakeResolver) LookupTXT(_ context.Context, name string) ([]string, error
 	return nil, &net.DNSError{Err: "no such host", Name: name}
 }
 
-func (f fakeResolver) LookupMX(_ context.Context, _ string) ([]*net.MX, error) {
-	return nil, errors.New("not used")
+func (f fakeResolver) LookupMX(_ context.Context, name string) ([]*net.MX, error) {
+	if records, ok := f.mx[name]; ok {
+		return records, nil
+	}
+	return nil, &net.DNSError{Err: "no such host", Name: name}
 }
 
 func (f fakeResolver) LookupNS(_ context.Context, name string) ([]*net.NS, error) {
@@ -38,6 +45,27 @@ func (f fakeResolver) LookupNS(_ context.Context, name string) ([]*net.NS, error
 
 func (f fakeResolver) LookupCNAME(_ context.Context, _ string) (string, error) {
 	return "", errors.New("not used")
+}
+
+func (f fakeResolver) LookupDS(_ context.Context, name string) ([]DSRecord, error) {
+	if records, ok := f.ds[name]; ok {
+		return records, nil
+	}
+	return nil, &net.DNSError{Err: "no such host", Name: name}
+}
+
+func (f fakeResolver) LookupDNSKEY(_ context.Context, name string) ([]DNSKEYRecord, error) {
+	if records, ok := f.dnskey[name]; ok {
+		return records, nil
+	}
+	return nil, &net.DNSError{Err: "no such host", Name: name}
+}
+
+func (f fakeResolver) LookupTLSA(_ context.Context, name string) ([]TLSARecord, error) {
+	if records, ok := f.tlsa[name]; ok {
+		return records, nil
+	}
+	return nil, &net.DNSError{Err: "no such host", Name: name}
 }
 
 func useTestTLSProbe(t *testing.T, result tlsProbeResult, err error) {
@@ -68,12 +96,33 @@ func TestScannerHealthyDomain(t *testing.T) {
 			"_smtp._tls." + domain:    {"v=TLSRPTv1; rua=mailto:tlsrpt@example.com"},
 			"default._bimi." + domain: {"v=BIMI1; l=https://example.com/logo.svg; a=https://example.com/vmc.pem"},
 		},
+		mx: map[string][]*net.MX{
+			domain: {
+				{Host: "mx1.example.com", Pref: 10},
+			},
+		},
 		ns: map[string][]*net.NS{
 			domain: {
 				{Host: "ns1.example.net."},
 				{Host: "ns2.example.net."},
 				{Host: "ns3.example.net."},
 				{Host: "ns4.example.net."},
+			},
+		},
+		ds: map[string][]DSRecord{
+			domain: {
+				{KeyTag: 12345, Algorithm: 13, DigestType: 2, Digest: "abc123"},
+			},
+		},
+		dnskey: map[string][]DNSKEYRecord{
+			domain: {
+				{Flags: 257, Protocol: 3, Algorithm: 13, PublicKey: "ksk"},
+				{Flags: 256, Protocol: 3, Algorithm: 13, PublicKey: "zsk"},
+			},
+		},
+		tlsa: map[string][]TLSARecord{
+			"_25._tcp.mx1.example.com": {
+				{Usage: 3, Selector: 1, MatchingType: 1, Certificate: "abcdef"},
 			},
 		},
 	}
@@ -112,12 +161,33 @@ func TestScannerBIMIWarnWhenMissingLogo(t *testing.T) {
 			"_smtp._tls." + domain:    {"v=TLSRPTv1; rua=mailto:tlsrpt@example.com"},
 			"default._bimi." + domain: {"v=BIMI1; a=https://example.com/vmc.pem"},
 		},
+		mx: map[string][]*net.MX{
+			domain: {
+				{Host: "mx1.example.com", Pref: 10},
+			},
+		},
 		ns: map[string][]*net.NS{
 			domain: {
 				{Host: "ns1.example.net."},
 				{Host: "ns2.example.net."},
 				{Host: "ns3.example.net."},
 				{Host: "ns4.example.net."},
+			},
+		},
+		ds: map[string][]DSRecord{
+			domain: {
+				{KeyTag: 12345, Algorithm: 13, DigestType: 2, Digest: "abc123"},
+			},
+		},
+		dnskey: map[string][]DNSKEYRecord{
+			domain: {
+				{Flags: 257, Protocol: 3, Algorithm: 13, PublicKey: "ksk"},
+				{Flags: 256, Protocol: 3, Algorithm: 13, PublicKey: "zsk"},
+			},
+		},
+		tlsa: map[string][]TLSARecord{
+			"_25._tcp.mx1.example.com": {
+				{Usage: 3, Selector: 1, MatchingType: 1, Certificate: "abcdef"},
 			},
 		},
 	}
@@ -160,10 +230,31 @@ func TestScannerMissingRecords(t *testing.T) {
 		txt: map[string][]string{
 			domain: {"v=spf1 include:spf.example.net ~all"},
 		},
+		mx: map[string][]*net.MX{
+			domain: {
+				{Host: "mx1.example.com", Pref: 10},
+			},
+		},
 		ns: map[string][]*net.NS{
 			domain: {
 				{Host: "ns1.example.net."},
 				{Host: "ns2.example.net."},
+			},
+		},
+		ds: map[string][]DSRecord{
+			domain: {
+				{KeyTag: 12345, Algorithm: 13, DigestType: 2, Digest: "abc123"},
+			},
+		},
+		dnskey: map[string][]DNSKEYRecord{
+			domain: {
+				{Flags: 257, Protocol: 3, Algorithm: 13, PublicKey: "ksk"},
+				{Flags: 256, Protocol: 3, Algorithm: 13, PublicKey: "zsk"},
+			},
+		},
+		tlsa: map[string][]TLSARecord{
+			"_25._tcp.mx1.example.com": {
+				{Usage: 3, Selector: 1, MatchingType: 1, Certificate: "abcdef"},
 			},
 		},
 	}
@@ -201,12 +292,33 @@ func TestScannerTLSWarnWhenExpiringSoon(t *testing.T) {
 			"_smtp._tls." + domain:    {"v=TLSRPTv1; rua=mailto:tlsrpt@example.com"},
 			"default._bimi." + domain: {"v=BIMI1; l=https://example.com/logo.svg; a=https://example.com/vmc.pem"},
 		},
+		mx: map[string][]*net.MX{
+			domain: {
+				{Host: "mx1.example.com", Pref: 10},
+			},
+		},
 		ns: map[string][]*net.NS{
 			domain: {
 				{Host: "ns1.example.net."},
 				{Host: "ns2.example.net."},
 				{Host: "ns3.example.net."},
 				{Host: "ns4.example.net."},
+			},
+		},
+		ds: map[string][]DSRecord{
+			domain: {
+				{KeyTag: 12345, Algorithm: 13, DigestType: 2, Digest: "abc123"},
+			},
+		},
+		dnskey: map[string][]DNSKEYRecord{
+			domain: {
+				{Flags: 257, Protocol: 3, Algorithm: 13, PublicKey: "ksk"},
+				{Flags: 256, Protocol: 3, Algorithm: 13, PublicKey: "zsk"},
+			},
+		},
+		tlsa: map[string][]TLSARecord{
+			"_25._tcp.mx1.example.com": {
+				{Usage: 3, Selector: 1, MatchingType: 1, Certificate: "abcdef"},
 			},
 		},
 	}
@@ -271,5 +383,99 @@ func TestChecksFromNamesRejectsUnknown(t *testing.T) {
 	_, err := ChecksFromNames([]string{"unknown_check"})
 	if err == nil {
 		t.Fatal("expected error for unknown check")
+	}
+}
+
+func TestScannerDNSSECFailsWhenDSMissing(t *testing.T) {
+	useTestTLSProbe(t, tlsProbeResult{
+		Version:  tls.VersionTLS13,
+		NotAfter: time.Now().UTC().Add(90 * 24 * time.Hour),
+		Issuer:   "CN=ZeroSSL",
+	}, nil)
+	domain := "example.com"
+	resolver := fakeResolver{
+		txt: map[string][]string{
+			domain:                    {"v=spf1 include:spf.example.net -all"},
+			"s1._domainkey." + domain: {"v=DKIM1; k=rsa; p=abc"},
+			"_dmarc." + domain:        {"v=DMARC1; p=reject; rua=mailto:dmarc@example.com"},
+			"_mta-sts." + domain:      {"v=STSv1; id=2026010101"},
+			"_smtp._tls." + domain:    {"v=TLSRPTv1; rua=mailto:tlsrpt@example.com"},
+			"default._bimi." + domain: {"v=BIMI1; l=https://example.com/logo.svg; a=https://example.com/vmc.pem"},
+		},
+		mx: map[string][]*net.MX{
+			domain: {{Host: "mx1.example.com", Pref: 10}},
+		},
+		ns: map[string][]*net.NS{
+			domain: {{Host: "ns1.example.net."}, {Host: "ns2.example.net."}},
+		},
+		dnskey: map[string][]DNSKEYRecord{
+			domain: {{Flags: 257, Protocol: 3, Algorithm: 13, PublicKey: "ksk"}},
+		},
+		tlsa: map[string][]TLSARecord{
+			"_25._tcp.mx1.example.com": {{Usage: 3, Selector: 1, MatchingType: 1, Certificate: "abcdef"}},
+		},
+	}
+	report, err := NewScanner(resolver).Scan(context.Background(), ScanRequest{TenantID: "t1", Domain: domain, DKIMSelectors: []string{"s1"}})
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	found := false
+	for _, finding := range report.Findings {
+		if finding.Check == "dnssec_validation" {
+			found = true
+			if finding.Status != StatusFail {
+				t.Fatalf("dnssec status=%s", finding.Status)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected dnssec_validation finding")
+	}
+}
+
+func TestScannerDANEWarnWhenTLSAMissing(t *testing.T) {
+	useTestTLSProbe(t, tlsProbeResult{
+		Version:  tls.VersionTLS13,
+		NotAfter: time.Now().UTC().Add(90 * 24 * time.Hour),
+		Issuer:   "CN=ZeroSSL",
+	}, nil)
+	domain := "example.com"
+	resolver := fakeResolver{
+		txt: map[string][]string{
+			domain:                    {"v=spf1 include:spf.example.net -all"},
+			"s1._domainkey." + domain: {"v=DKIM1; k=rsa; p=abc"},
+			"_dmarc." + domain:        {"v=DMARC1; p=reject; rua=mailto:dmarc@example.com"},
+			"_mta-sts." + domain:      {"v=STSv1; id=2026010101"},
+			"_smtp._tls." + domain:    {"v=TLSRPTv1; rua=mailto:tlsrpt@example.com"},
+			"default._bimi." + domain: {"v=BIMI1; l=https://example.com/logo.svg; a=https://example.com/vmc.pem"},
+		},
+		mx: map[string][]*net.MX{
+			domain: {{Host: "mx1.example.com", Pref: 10}},
+		},
+		ns: map[string][]*net.NS{
+			domain: {{Host: "ns1.example.net."}, {Host: "ns2.example.net."}},
+		},
+		ds: map[string][]DSRecord{
+			domain: {{KeyTag: 12345, Algorithm: 13, DigestType: 2, Digest: "abc123"}},
+		},
+		dnskey: map[string][]DNSKEYRecord{
+			domain: {{Flags: 257, Protocol: 3, Algorithm: 13, PublicKey: "ksk"}, {Flags: 256, Protocol: 3, Algorithm: 13, PublicKey: "zsk"}},
+		},
+	}
+	report, err := NewScanner(resolver).Scan(context.Background(), ScanRequest{TenantID: "t1", Domain: domain, DKIMSelectors: []string{"s1"}})
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	found := false
+	for _, finding := range report.Findings {
+		if finding.Check == "dane_tlsa" {
+			found = true
+			if finding.Status != StatusWarn {
+				t.Fatalf("dane status=%s", finding.Status)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected dane_tlsa finding")
 	}
 }
