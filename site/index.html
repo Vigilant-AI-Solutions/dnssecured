@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DNSsecured | Security-first DNS stack</title>
+    <meta
+      name="description"
+      content="DNSsecured is an open DNS security stack for secure name server operations, DNS posture validation, and resilient traffic control."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./index.html">DNSsecured</a>
+      <nav>
+        <a href="./index.html" aria-current="page">Home</a>
+        <a href="./docs.html">Docs</a>
+        <a href="https://github.com/Vigilant-AI-Solutions/dnssecured">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="eyebrow">Open source infrastructure</p>
+        <h1>Security-first DNS tech stack for modern operations</h1>
+        <p>
+          DNSsecured helps teams ship safer DNS infrastructure with hardened resolver trust, DNS posture checks, DNSSEC and DANE validation, and
+          decision engines for resilient traffic steering.
+        </p>
+        <div class="actions">
+          <a class="btn primary" href="./docs.html">Read docs</a>
+          <a class="btn" href="https://github.com/Vigilant-AI-Solutions/dnssecured">View source</a>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>Authoritative hardening</h2>
+          <p>Validate hidden-primary posture, TSIG, XFR ACLs, DNS Cookies, response-rate limiting, and minimal-response controls.</p>
+        </article>
+        <article class="card">
+          <h2>Resolver trust</h2>
+          <p>Use system DNS, custom UDP/TCP upstreams, DNS-over-TLS, or DNS-over-HTTPS with optional TLS pinning controls.</p>
+        </article>
+        <article class="card">
+          <h2>State-of-the-art checks</h2>
+          <p>Run SPF, DKIM, DMARC, MTA-STS, TLS-RPT, BIMI, DNSSEC component validation, and DANE/TLSA verification.</p>
+        </article>
+        <article class="card">
+          <h2>Automation engines</h2>
+          <p>Generate DNSSEC rollover plans and evaluate health/latency-aware steering decisions for reliable multi-endpoint traffic.</p>
+        </article>
+      </section>
+
+      <section class="stack">
+        <h2>Tech stack</h2>
+        <div class="stack-grid">
+          <div>
+            <h3>Runtime</h3>
+            <ul>
+              <li>Go HTTP service and embeddable packages</li>
+              <li>Static project site (this website)</li>
+              <li>Caddy-friendly deployment model</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Core packages</h3>
+            <ul>
+              <li><code>pkg/dnssecured</code> - scanner and checks</li>
+              <li><code>pkg/authoritative</code> - hardening posture</li>
+              <li><code>pkg/dnssec</code> - rollover planning</li>
+              <li><code>pkg/steering</code> - decision engine</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Security posture</h3>
+            <ul>
+              <li>Encrypted resolver modes (DoT/DoH)</li>
+              <li>Optional TLS certificate pinning</li>
+              <li>DNSSEC and DANE-focused validation paths</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>DNSsecured is built for infrastructure teams who need practical DNS security at production scale.</p>
+    </footer>
+  </body>
+</html>

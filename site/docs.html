@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DNSsecured Docs</title>
+    <meta name="description" content="DNSsecured quick documentation and configuration reference." />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./index.html">DNSsecured</a>
+      <nav>
+        <a href="./index.html">Home</a>
+        <a href="./docs.html" aria-current="page">Docs</a>
+        <a href="https://github.com/Vigilant-AI-Solutions/dnssecured">GitHub</a>
+      </nav>
+    </header>
+
+    <main class="docs">
+      <h1>Project documentation</h1>
+
+      <section class="card">
+        <h2>What DNSsecured offers</h2>
+        <ul>
+          <li>Scanner APIs for DNS and mail-security posture</li>
+          <li>Authoritative DNS hardening validation</li>
+          <li>DNSSEC rollover planning support</li>
+          <li>Traffic-steering decisioning for resilient endpoint routing</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>DNSsecuredfile quick start</h2>
+        <pre><code>listen :8080
+cors true
+default_tenant public
+timeout 10s
+max_concurrency 4
+checks ns_redundancy dnssec_validation dane_tlsa tls_certificate spf dkim_selector_health dmarc mta_sts tls_rpt bimi
+resolver_mode dot
+dot_upstreams 1.1.1.1 1.0.0.1
+tls_server_name cloudflare-dns.com</code></pre>
+      </section>
+
+      <section class="card">
+        <h2>Available APIs</h2>
+        <ul>
+          <li><code>POST /v1/analyze</code> - core DNS security scan</li>
+          <li><code>POST /v1/authoritative/validate</code> - authoritative hardening report</li>
+          <li><code>POST /v1/dnssec/plan</code> - DNSSEC rollover planning</li>
+          <li><code>POST /v1/steering/decision</code> - endpoint steering decision</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>Static site hosting with Caddy</h2>
+        <pre><code>dnssecured.example.com {
+  root * /var/www/dnssecured/site
+  file_server
+  encode zstd gzip
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "strict-origin-when-cross-origin"
+  }
+}</code></pre>
+      </section>
+    </main>
+
+    <footer>
+      <p>See the full implementation details in the repository README and package docs.</p>
+    </footer>
+  </body>
+</html>

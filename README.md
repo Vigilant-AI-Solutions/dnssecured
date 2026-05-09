@@ -108,3 +108,13 @@ result, err := scanner.Scan(ctx, dnssecured.ScanRequest{
 - `pkg/dnssec/` DNSSEC rollover planning engine
 - `pkg/steering/` traffic-steering policy engine
 - `cmd/dnssecured/` standalone runtime for API usage
+- `site/` static project website (`index.html`, `docs.html`, `styles.css`)
+
+## Static project site
+
+The repository includes a static site inspired by infrastructure-first product docs:
+
+- `site/index.html` - value proposition and stack overview
+- `site/docs.html` - quick docs, API summary, and deployment snippet
+
+Host it with any static server (Caddy, nginx, GitHub Pages, or object storage CDN).
