@@ -31,9 +31,16 @@ func main() {
 	if err != nil {
 		log.Fatalf("invalid checks in config: %v", err)
 	}
-	resolver := dnssecured.NewNetResolver()
-	if len(cfg.Nameservers) > 0 {
-		resolver = dnssecured.NewNetResolverWithNameservers(cfg.Nameservers)
+	resolver, err := dnssecured.NewResolverWithConfig(dnssecured.ResolverConfig{
+		Mode:          dnssecured.ResolverMode(cfg.ResolverMode),
+		Nameservers:   cfg.Nameservers,
+		DoTUpstreams:  cfg.DoTUpstreams,
+		DoHUpstreams:  cfg.DoHUpstreams,
+		TLSServerName: cfg.TLSServerName,
+		TLSPins:       cfg.TLSPins,
+	})
+	if err != nil {
+		log.Fatalf("invalid resolver config: %v", err)
 	}
 	scanner := dnssecured.NewScanner(
 		resolver,

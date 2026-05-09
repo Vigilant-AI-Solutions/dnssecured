@@ -16,6 +16,11 @@ type RuntimeConfig struct {
 	MaxConcurrency int
 	Checks         []string
 	Nameservers    []string
+	ResolverMode   string
+	DoTUpstreams   []string
+	DoHUpstreams   []string
+	TLSServerName  string
+	TLSPins        []string
 }
 
 func DefaultRuntimeConfig() RuntimeConfig {
@@ -25,6 +30,7 @@ func DefaultRuntimeConfig() RuntimeConfig {
 		DefaultTenant:  "public",
 		Timeout:        10 * time.Second,
 		MaxConcurrency: 4,
+		ResolverMode:   "system",
 	}
 }
 
@@ -94,6 +100,37 @@ func ParseDNSsecuredfile(content string) (RuntimeConfig, error) {
 				return RuntimeConfig{}, fmt.Errorf("line %d: nameservers expects one or more values", lineNo)
 			}
 			cfg.Nameservers = append([]string(nil), args...)
+		case "resolver_mode":
+			if len(args) != 1 {
+				return RuntimeConfig{}, fmt.Errorf("line %d: resolver_mode expects 1 value", lineNo)
+			}
+			mode := strings.ToLower(strings.TrimSpace(args[0]))
+			switch mode {
+			case "system", "udp", "dot", "doh":
+				cfg.ResolverMode = mode
+			default:
+				return RuntimeConfig{}, fmt.Errorf("line %d: resolver_mode must be one of system|udp|dot|doh", lineNo)
+			}
+		case "dot_upstreams":
+			if len(args) == 0 {
+				return RuntimeConfig{}, fmt.Errorf("line %d: dot_upstreams expects one or more values", lineNo)
+			}
+			cfg.DoTUpstreams = append([]string(nil), args...)
+		case "doh_upstreams":
+			if len(args) == 0 {
+				return RuntimeConfig{}, fmt.Errorf("line %d: doh_upstreams expects one or more values", lineNo)
+			}
+			cfg.DoHUpstreams = append([]string(nil), args...)
+		case "tls_server_name":
+			if len(args) != 1 {
+				return RuntimeConfig{}, fmt.Errorf("line %d: tls_server_name expects 1 value", lineNo)
+			}
+			cfg.TLSServerName = args[0]
+		case "tls_pins":
+			if len(args) == 0 {
+				return RuntimeConfig{}, fmt.Errorf("line %d: tls_pins expects one or more values", lineNo)
+			}
+			cfg.TLSPins = append([]string(nil), args...)
 		default:
 			return RuntimeConfig{}, fmt.Errorf("line %d: unknown directive %q", lineNo, key)
 		}

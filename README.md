@@ -45,6 +45,10 @@ timeout 10s
 max_concurrency 4
 checks ns_redundancy tls_certificate spf dkim_selector_health dmarc mta_sts tls_rpt bimi
 nameservers 1.1.1.1 1.0.0.1 8.8.8.8:53
+resolver_mode dot
+dot_upstreams 1.1.1.1 1.0.0.1
+tls_server_name cloudflare-dns.com
+# tls_pins sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 ```
 
 Supported directives:
@@ -56,6 +60,11 @@ Supported directives:
 - `max_concurrency` — maximum concurrent checks
 - `checks` — enabled checks in execution order
 - `nameservers` — custom DNS resolver targets used for lookups
+- `resolver_mode` — `system`, `udp`, `dot`, or `doh`
+- `dot_upstreams` — DNS-over-TLS upstreams (`host` or `host:port`)
+- `doh_upstreams` — DNS-over-HTTPS upstream URLs (`https://.../dns-query`)
+- `tls_server_name` — optional TLS SNI/hostname override for `dot`/`doh`
+- `tls_pins` — optional SHA-256 certificate pins (`sha256/<base64>`) for `dot`/`doh`
 
 ## HTTP API
 
