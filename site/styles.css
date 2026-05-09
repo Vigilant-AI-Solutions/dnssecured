@@ -173,61 +173,82 @@ main {
   background: rgba(77, 163, 255, 0.12);
 }
 
-.flow {
+.terminal {
   margin-top: 1rem;
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-
-.node {
-  border: 1px solid var(--line);
+  border: 1px solid #2f477f;
   border-radius: 12px;
-  padding: 0.75rem;
-  background: rgba(10, 18, 40, 0.65);
-  transition: border-color 250ms ease, box-shadow 250ms ease, transform 250ms ease;
+  background: #060b17;
+  overflow: hidden;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
 }
 
-.node h3 {
-  margin: 0 0 0.25rem;
-  font-size: 0.98rem;
+.terminal-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid #202b4a;
+  background: #0b1326;
 }
 
-.node p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.9rem;
+.terminal-titlebar span {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #3f5f95;
 }
 
-.node.active {
-  border-color: #6db7ff;
-  box-shadow: 0 0 0 1px rgba(109, 183, 255, 0.4), 0 10px 25px rgba(26, 84, 153, 0.25);
-  transform: translateY(-2px);
-}
-
-.telemetry {
-  margin-top: 0.95rem;
-  display: grid;
-  gap: 0.7rem;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-}
-
-.telemetry div {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 0.55rem 0.65rem;
-  background: rgba(11, 19, 42, 0.8);
-}
-
-.telemetry span {
-  display: block;
-  color: var(--muted);
+.terminal-titlebar strong {
+  margin-left: 0.35rem;
   font-size: 0.78rem;
-  margin-bottom: 0.2rem;
+  color: #b6caef;
+  font-weight: 600;
 }
 
-.telemetry strong {
-  font-size: 0.96rem;
+#terminal-output {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  color: #cde6ff;
+  min-height: 290px;
+  max-height: 390px;
+  overflow: auto;
+}
+
+.prompt-line {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0.15rem 0.8rem 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #e1eeff;
+}
+
+.prompt {
+  color: #84c0ff;
+}
+
+#terminal-input {
+  color: #e1eeff;
+}
+
+.cursor {
+  color: #84c0ff;
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 
 .card h2 {

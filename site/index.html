@@ -41,41 +41,24 @@
         </div>
       </section>
 
-      <section class="realtime card" aria-label="Real-time DNS flow">
+      <section class="realtime card" aria-label="Real-time DNS CLI demo">
         <div class="realtime-head">
           <h2>Watch DNS in real-time</h2>
           <span class="pill">Pipeline cycle: &lt; 60s</span>
         </div>
         <p class="muted">
-          This visual simulation shows how DNSsecured evaluates a request: resolver trust, DNS checks, DNSSEC/DANE validation, and smart endpoint
-          steering.
+          Terminal-style simulation inspired by Caddy demos. It runs DNSsecured commands and shows live security posture events.
         </p>
-        <div class="flow" id="dns-flow">
-          <div class="node" data-step="0">
-            <h3>Query Ingest</h3>
-            <p>Domain + tenant request accepted.</p>
+        <div class="terminal" id="terminal-demo" role="img" aria-label="Animated command line demo">
+          <div class="terminal-titlebar">
+            <span></span><span></span><span></span>
+            <strong>dnssecured demo shell</strong>
           </div>
-          <div class="node" data-step="1">
-            <h3>Trusted Resolver</h3>
-            <p>DoT/DoH + optional pinning applied.</p>
+          <pre id="terminal-output"></pre>
+          <div class="prompt-line">
+            <span class="prompt">╚>$</span>
+            <span id="terminal-input"></span><span class="cursor">█</span>
           </div>
-          <div class="node" data-step="2">
-            <h3>Security Checks</h3>
-            <p>SPF, DKIM, DMARC, MTA-STS, TLS-RPT, BIMI.</p>
-          </div>
-          <div class="node" data-step="3">
-            <h3>DNSSEC + DANE</h3>
-            <p>DS/DNSKEY and TLSA paths validated.</p>
-          </div>
-          <div class="node" data-step="4">
-            <h3>Traffic Steering</h3>
-            <p>Latency/health policy selects endpoint.</p>
-          </div>
-        </div>
-        <div class="telemetry">
-          <div><span>Stage</span><strong id="telemetry-stage">Query Ingest</strong></div>
-          <div><span>Posture Score</span><strong id="telemetry-score">100</strong></div>
-          <div><span>Selected Route</span><strong id="telemetry-route">us-east-1</strong></div>
         </div>
       </section>
 
