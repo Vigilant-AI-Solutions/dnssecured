@@ -127,5 +127,6 @@ The repository includes a static site inspired by infrastructure-first product d
 
 - `site/index.html` - value proposition and stack overview
 - `site/docs.html` - quick docs, API summary, and deployment snippet
+- `site/assets/` - DNSsecured logo, favicon, and Resolvora sponsorship logo
 
 Host it with any static server (Caddy, nginx, GitHub Pages, or object storage CDN).
