@@ -11,14 +11,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Vigilant-AI-Solutions/dnssecured/pkg/authoritative"
 	"github.com/Vigilant-AI-Solutions/dnssecured/pkg/config"
+	"github.com/Vigilant-AI-Solutions/dnssecured/pkg/dnssec"
 	"github.com/Vigilant-AI-Solutions/dnssecured/pkg/dnssecured"
+	"github.com/Vigilant-AI-Solutions/dnssecured/pkg/steering"
 )
 
 type scanRequest struct {
 	TenantID      string   `json:"tenant_id,omitempty"`
 	Domain        string   `json:"domain"`
 	DKIMSelectors []string `json:"dkim_selectors,omitempty"`
+}
+
+type dnssecPlanRequest struct {
+	Policy dnssec.Policy `json:"policy"`
+	State  dnssec.State  `json:"state"`
+}
+
+type steeringDecisionRequest struct {
+	Policy    steering.Policy     `json:"policy"`
+	Endpoints []steering.Endpoint `json:"endpoints"`
 }
 
 func main() {
@@ -59,6 +72,9 @@ func main() {
 	mux.HandleFunc("POST /v1/analyze", func(w http.ResponseWriter, r *http.Request) {
 		handleScan(w, r, scanner, cfg.DefaultTenant)
 	})
+	mux.HandleFunc("POST /v1/authoritative/validate", handleAuthoritativeValidation)
+	mux.HandleFunc("POST /v1/dnssec/plan", handleDNSSECPlan)
+	mux.HandleFunc("POST /v1/steering/decision", handleSteeringDecision)
 
 	handler := http.Handler(mux)
 	if cfg.EnableCORS {
@@ -135,6 +151,43 @@ func handleScan(w http.ResponseWriter, r *http.Request, scanner *dnssecured.Scan
 		return
 	}
 	writeJSON(w, http.StatusCreated, report)
+}
+
+func handleAuthoritativeValidation(w http.ResponseWriter, r *http.Request) {
+	var req authoritative.Config
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, authoritative.Validate(req))
+}
+
+func handleDNSSECPlan(w http.ResponseWriter, r *http.Request) {
+	var req dnssecPlanRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json: "+err.Error())
+		return
+	}
+	plan, err := dnssec.BuildPlan(req.Policy, req.State)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "failed to build dnssec plan: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, plan)
+}
+
+func handleSteeringDecision(w http.ResponseWriter, r *http.Request) {
+	var req steeringDecisionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json: "+err.Error())
+		return
+	}
+	decision, err := steering.Select(req.Policy, req.Endpoints)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "failed to compute steering decision: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, decision)
 }
 
 func withCORS(next http.Handler) http.Handler {

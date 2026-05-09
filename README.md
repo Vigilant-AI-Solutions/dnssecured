@@ -71,6 +71,9 @@ Supported directives:
 - `GET /healthz`
 - `POST /v1/scan` (compatibility)
 - `POST /v1/analyze` (preferred)
+- `POST /v1/authoritative/validate` (authoritative nameserver hardening posture)
+- `POST /v1/dnssec/plan` (DNSSEC rollover/automation planning)
+- `POST /v1/steering/decision` (health + latency aware traffic-steering decision)
 
 Request body:
 
@@ -101,4 +104,7 @@ result, err := scanner.Scan(ctx, dnssecured.ScanRequest{
 ## Project layout
 
 - `pkg/dnssecured/` core engine, resolver abstraction, checks, and types
+- `pkg/authoritative/` authoritative DNS security posture validator
+- `pkg/dnssec/` DNSSEC rollover planning engine
+- `pkg/steering/` traffic-steering policy engine
 - `cmd/dnssecured/` standalone runtime for API usage
