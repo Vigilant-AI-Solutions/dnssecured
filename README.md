@@ -22,10 +22,21 @@ DNSsecured is a reusable, library-first DNS security stack in Go for building ha
 - **NS1-style resilience**: added authoritative nameserver redundancy analysis (`ns_redundancy`) to flag weak DNS fault tolerance.
 - **ZeroSSL-aligned SSL control**: added HTTPS certificate posture validation (`tls_certificate`) for expiry and modern TLS enforcement to support automated renewal operations.
 
+## CLI (Caddy-style commands)
+
+```bash
+dnssecured run --config ./DNSsecuredfile
+dnssecured validate --config ./DNSsecuredfile
+dnssecured list-checks
+dnssecured version
+```
+
+If no command is provided, `dnssecured` defaults to `run`.
+
 ## Quick start (service mode)
 
 ```bash
-go run ./cmd/dnssecured
+go run ./cmd/dnssecured run --config ./DNSsecuredfile
 ```
 
 Optional environment variable:

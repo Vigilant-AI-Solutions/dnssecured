@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -34,33 +36,85 @@ type steeringDecisionRequest struct {
 	Endpoints []steering.Endpoint `json:"endpoints"`
 }
 
+const version = "0.1.0"
+
 func main() {
-	cfg, source, err := loadRuntimeConfig()
-	if err != nil {
+	if err := runCLI(os.Args[1:], os.Stdout, os.Stderr); err != nil {
 		log.Fatal(err)
 	}
+}
 
-	checks, err := dnssecured.ChecksFromNames(cfg.Checks)
-	if err != nil {
-		log.Fatalf("invalid checks in config: %v", err)
+func runCLI(args []string, stdout, stderr io.Writer) error {
+	if len(args) == 0 {
+		return runServer("", "", stdout)
 	}
-	resolver, err := dnssecured.NewResolverWithConfig(dnssecured.ResolverConfig{
-		Mode:          dnssecured.ResolverMode(cfg.ResolverMode),
-		Nameservers:   cfg.Nameservers,
-		DoTUpstreams:  cfg.DoTUpstreams,
-		DoHUpstreams:  cfg.DoHUpstreams,
-		TLSServerName: cfg.TLSServerName,
-		TLSPins:       cfg.TLSPins,
-	})
-	if err != nil {
-		log.Fatalf("invalid resolver config: %v", err)
+	switch args[0] {
+	case "run":
+		fs := flag.NewFlagSet("run", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		configPath := fs.String("config", "", "Path to DNSsecuredfile")
+		addr := fs.String("addr", "", "Listen address override")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		return runServer(*configPath, *addr, stdout)
+	case "validate":
+		fs := flag.NewFlagSet("validate", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		configPath := fs.String("config", "", "Path to DNSsecuredfile")
+		addr := fs.String("addr", "", "Listen address override")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		cfg, source, err := loadRuntimeConfig(*configPath, *addr)
+		if err != nil {
+			return err
+		}
+		if _, err := buildScanner(cfg); err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintf(stdout, "Config OK (%s)\n", source)
+		return nil
+	case "list-checks":
+		for _, name := range dnssecured.AvailableCheckNames() {
+			_, _ = fmt.Fprintln(stdout, name)
+		}
+		return nil
+	case "version":
+		_, _ = fmt.Fprintf(stdout, "dnssecured %s\n", version)
+		return nil
+	case "help", "-h", "--help":
+		printUsage(stdout)
+		return nil
+	default:
+		printUsage(stderr)
+		return fmt.Errorf("unknown command %q", args[0])
 	}
-	scanner := dnssecured.NewScanner(
-		resolver,
-		dnssecured.WithTimeout(cfg.Timeout),
-		dnssecured.WithMaxConcurrency(cfg.MaxConcurrency),
-		dnssecured.WithChecks(checks...),
-	)
+}
+
+func printUsage(w io.Writer) {
+	_, _ = fmt.Fprintln(w, "dnssecured - security-first DNS stack")
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintln(w, "  dnssecured run [--config <path>] [--addr <listen>]")
+	_, _ = fmt.Fprintln(w, "  dnssecured validate [--config <path>] [--addr <listen>]")
+	_, _ = fmt.Fprintln(w, "  dnssecured list-checks")
+	_, _ = fmt.Fprintln(w, "  dnssecured version")
+	_, _ = fmt.Fprintln(w, "  dnssecured help")
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "If no command is provided, dnssecured behaves like: dnssecured run")
+}
+
+func runServer(configPath, addrOverride string, stdout io.Writer) error {
+	cfg, source, err := loadRuntimeConfig(configPath, addrOverride)
+	if err != nil {
+		return err
+	}
+
+	scanner, err := buildScanner(cfg)
+	if err != nil {
+		return err
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -86,24 +140,54 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	log.Printf("dnssecured listening on %s (config: %s)", cfg.ListenAddress, source)
+	_, _ = fmt.Fprintf(stdout, "dnssecured listening on %s (config: %s)\n", cfg.ListenAddress, source)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal(err)
+		return err
 	}
+	return nil
 }
 
-func loadRuntimeConfig() (config.RuntimeConfig, string, error) {
-	envPath := strings.TrimSpace(os.Getenv("DNSSECURED_CONFIG"))
-	addrEnv := strings.TrimSpace(os.Getenv("DNSSECURED_ADDR"))
-	if envPath != "" {
-		cfg, err := config.LoadDNSsecuredfile(envPath)
+func buildScanner(cfg config.RuntimeConfig) (*dnssecured.Scanner, error) {
+	checks, err := dnssecured.ChecksFromNames(cfg.Checks)
+	if err != nil {
+		return nil, fmt.Errorf("invalid checks in config: %w", err)
+	}
+	resolver, err := dnssecured.NewResolverWithConfig(dnssecured.ResolverConfig{
+		Mode:          dnssecured.ResolverMode(cfg.ResolverMode),
+		Nameservers:   cfg.Nameservers,
+		DoTUpstreams:  cfg.DoTUpstreams,
+		DoHUpstreams:  cfg.DoHUpstreams,
+		TLSServerName: cfg.TLSServerName,
+		TLSPins:       cfg.TLSPins,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("invalid resolver config: %w", err)
+	}
+	return dnssecured.NewScanner(
+		resolver,
+		dnssecured.WithTimeout(cfg.Timeout),
+		dnssecured.WithMaxConcurrency(cfg.MaxConcurrency),
+		dnssecured.WithChecks(checks...),
+	), nil
+}
+
+func loadRuntimeConfig(configPath, addrOverride string) (config.RuntimeConfig, string, error) {
+	if strings.TrimSpace(configPath) == "" {
+		configPath = strings.TrimSpace(os.Getenv("DNSSECURED_CONFIG"))
+	}
+	addr := strings.TrimSpace(addrOverride)
+	if addr == "" {
+		addr = strings.TrimSpace(os.Getenv("DNSSECURED_ADDR"))
+	}
+	if configPath != "" {
+		cfg, err := config.LoadDNSsecuredfile(configPath)
 		if err != nil {
-			return config.RuntimeConfig{}, "", fmt.Errorf("failed to load DNSsecured config %q: %w", envPath, err)
+			return config.RuntimeConfig{}, "", fmt.Errorf("failed to load DNSsecured config %q: %w", configPath, err)
 		}
-		if addrEnv != "" {
-			cfg.ListenAddress = addrEnv
+		if addr != "" {
+			cfg.ListenAddress = addr
 		}
-		return cfg, envPath, nil
+		return cfg, configPath, nil
 	}
 
 	defaultPath := filepath.Join(".", "DNSsecuredfile")
@@ -114,13 +198,13 @@ func loadRuntimeConfig() (config.RuntimeConfig, string, error) {
 			return config.RuntimeConfig{}, "", fmt.Errorf("failed to load DNSsecuredfile: %w", err)
 		}
 		cfg = fileCfg
-		if addrEnv != "" {
-			cfg.ListenAddress = addrEnv
+		if addr != "" {
+			cfg.ListenAddress = addr
 		}
 		return cfg, defaultPath, nil
 	}
-	if addrEnv != "" {
-		cfg.ListenAddress = addrEnv
+	if addr != "" {
+		cfg.ListenAddress = addr
 	}
 	return cfg, "defaults", nil
 }
